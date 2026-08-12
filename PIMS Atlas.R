@@ -533,7 +533,7 @@ clusters <- list(
 )
 
 # ---- 13. API CONFIGURATION ----
-api_key <- "AQ.Ab8RN6LwdO8dwQAbrDTDYPMw2tjuhEOm-8T9V-aSXHTIsBdGtw"  # <-- REPLACE WITH YOUR ACTUAL KEY
+api_key <- ""  # <-- REPLACE WITH YOUR ACTUAL KEY
 api_url <- "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent"
 model <- "gemini-flash-latest"
 
