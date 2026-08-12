@@ -1,2 +1,2 @@
 # PimsAtlas
-PimsAtlas Softwaare & Files
+PimsAtlas Software & Files
