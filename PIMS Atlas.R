@@ -20,13 +20,15 @@ library(fmsb)       # For radar chart
 library(scales)     # For alpha() transparency
 
 # ---- 1. CONFIGURATION ----
-work_styles_folder <- "C:/Users/garyt/OneDrive/Documents/Box Sync Laptop/Emeris/Research/Project PIMS/PIMS Atlas Development/R-Folders"
-norm_groups_folder <- "C:/Users/garyt/OneDrive/Documents/Box Sync Laptop/Emeris/Research/Project PIMS/PIMS Atlas Development/R-Folders/NormGroups"
-graphs_folder   <- "C:/Users/garyt/OneDrive/Documents/Box Sync Laptop/Emeris/Research/Project PIMS/PIMS Atlas Development/R-Folders/Graphs"
-reports_folder  <- "C:/Users/garyt/OneDrive/Documents/Box Sync Laptop/Emeris/Research/Project PIMS/PIMS Atlas Development/R-Folders/Reports"
-userscores_folder <- "C:/Users/garyt/OneDrive/Documents/Box Sync Laptop/Emeris/Research/Project PIMS/PIMS Atlas Development/R-Folders/UserScores"
+# HARDCODED PATH TO R-Folders (CHANGE THIS TO YOUR ACTUAL FOLDER IF DIFFERENT)
+work_styles_folder <- "C:/Users/garyt/OneDrive/Documents/Box Sync Laptop/Emeris/Research/Project PIMS/PIMS Atlas Development/PimsAtlas/R-Folders"
+norm_groups_folder <- file.path(work_styles_folder, "NormGroups")
+graphs_folder      <- file.path(work_styles_folder, "Graphs")
+reports_folder     <- file.path(work_styles_folder, "Reports")
+userscores_folder  <- file.path(work_styles_folder, "UserScores")
 
-for (f in c(graphs_folder, reports_folder, userscores_folder)) {
+# Create output directories if they don't exist
+for (f in c(graphs_folder, reports_folder)) {
   if (!dir.exists(f)) dir.create(f, recursive = TRUE)
 }
 
@@ -62,6 +64,14 @@ facet_names <- c(
 
 fixed_columns <- c("Impact", "Job Zone", "Code", "Occupation")
 required_work_columns <- c(fixed_columns, facet_names)
+
+# ---- VERIFY PATHS ----
+cat("\n📂 Verifying paths...\n")
+cat(glue("  Work Styles folder exists: {dir.exists(work_styles_folder)}\n"))
+cat(glue("  Mapping file exists: {file.exists(file.path(work_styles_folder, mapping_file))}\n"))
+cat(glue("  Anchors file exists: {file.exists(file.path(work_styles_folder, anchors_file))}\n"))
+cat(glue("  Norm Groups folder exists: {dir.exists(norm_groups_folder)}\n"))
+cat(glue("  User Scores folder exists: {dir.exists(userscores_folder)}\n"))
 
 # ---- 2. LOAD NORMATIVE DATA ----
 load_norm_data <- function(norm_groups_folder, facet_names) {
@@ -250,7 +260,14 @@ expected_mapping_cols <- c(
 mapping_data <- read_xlsx(file.path(work_styles_folder, mapping_file))
 colnames(mapping_data) <- trimws(colnames(mapping_data))
 missing <- setdiff(expected_mapping_cols, colnames(mapping_data))
-if (length(missing) > 0) stop("Column mismatch in mapping file.")
+if (length(missing) > 0) {
+  cat("❌ Column mismatch in mapping file.\n")
+  cat("Expected columns:\n")
+  for (col in expected_mapping_cols) cat(glue("  - {col}\n"))
+  cat("Found columns:\n")
+  for (col in colnames(mapping_data)) cat(glue("  - {col}\n"))
+  stop("Column mismatch in mapping file.")
+}
 mapping_data <- mapping_data %>%
   filter(!if_all(everything(), ~ is.na(.) | . == "")) %>%
   mutate(across(where(is.character), ~ trimws(as.character(.)))) %>%
@@ -271,7 +288,14 @@ expected_anchors_cols <- c(
 anchors_data <- read_xlsx(file.path(work_styles_folder, anchors_file))
 colnames(anchors_data) <- trimws(colnames(anchors_data))
 missing <- setdiff(expected_anchors_cols, colnames(anchors_data))
-if (length(missing) > 0) stop("Column mismatch in anchors file.")
+if (length(missing) > 0) {
+  cat("❌ Column mismatch in anchors file.\n")
+  cat("Expected columns:\n")
+  for (col in expected_anchors_cols) cat(glue("  - {col}\n"))
+  cat("Found columns:\n")
+  for (col in colnames(anchors_data)) cat(glue("  - {col}\n"))
+  stop("Column mismatch in anchors file.")
+}
 anchors_data <- anchors_data %>%
   filter(!if_all(everything(), ~ is.na(.) | . == "")) %>%
   mutate(across(where(is.character), ~ trimws(as.character(.)))) %>%
@@ -731,14 +755,14 @@ if (max_congruence < congruence_threshold) {
     occ_workstyles[[code]] <- occ$element_weights
   }
   
-  # ---- 16c. RADAR CHART - PERFECTLY LABELED & SPACED ----
+  # ---- 16c. RADAR CHART ----
   if (length(occ_vectors) > 0) {
     cat("\n📊 Generating radar chart for top", top_n, "occupations...\n")
     
-    # ---- Prepare data ----
+    # Prepare data
     all_facets <- facet_names
     
-    # Build user profile with zero-masking: irrelevant facets = 0
+    # Build user profile with zero-masking
     user_profile <- numeric(length(all_facets))
     names(user_profile) <- all_facets
     for (i in seq_along(all_facets)) {
@@ -790,7 +814,7 @@ if (max_congruence < congruence_threshold) {
     considered_motivs_unique <- unique(considered_motivs_all)
     core_motivs_unique <- unique(core_motivs_all)
     
-    # ---- CRITICAL FIX: THE SHIFT METHOD ----
+    # SHIFT METHOD: Shift all values by +3 so zero-axis is at centre ring
     SHIFT <- 3
     user_shifted <- user_profile + SHIFT
     
@@ -799,7 +823,7 @@ if (max_congruence < congruence_threshold) {
       occ_shifted[[code]] <- occupation_profiles[[code]] + SHIFT
     }
     
-    # ---- Build radar_df with proper scaling ----
+    # Build radar_df with proper scaling
     n_profiles <- 2 + 1 + length(occ_shifted) 
     n_facets <- length(all_facets)
     
@@ -821,52 +845,29 @@ if (max_congruence < congruence_threshold) {
       radar_df[[col]] <- as.numeric(radar_df[[col]])
     }
     
-    # ---- Colours ----
+    # Colours
     colors <- c("#2E86C1", "#E74C3C", "#27AE60", "#F39C12", "#8E44AD")
     colors <- colors[1:min(nrow(radar_df) - 2, length(colors))]
     
-    # ---- Wrap text helpers ----
-    wrap_text <- function(text, max_width = 50) {
-      if (is.na(text) || text == "" || text == "NULL") return("")
-      words <- strsplit(as.character(text), ", ")[[1]]
-      if (length(words) == 0 || (length(words) == 1 && words[1] == "")) return("")
-      lines <- c()
-      current_line <- ""
-      for (word in words) {
-        if (nchar(current_line) + nchar(word) + 2 > max_width) {
-          if (current_line != "") lines <- c(lines, current_line)
-          current_line <- word
-        } else {
-          if (current_line == "") current_line <- word else current_line <- paste(current_line, word, sep = ", ")
-        }
-      }
-      if (current_line != "") lines <- c(lines, current_line)
-      return(lines)
-    }
-    
-    # ---- Function to draw radar ----
+    # Function to draw radar
     draw_radar <- function() {
-      # Set up a clean layout with 3 rows
       layout(matrix(c(1, 2, 3, 4), nrow = 4), heights = c(1.2, 0.8, 10, 3.0))
       par(mar = c(0, 0, 0, 0))
       
-      # ---- Row 1: Title ----
+      # Row 1: Title
       plot.new()
       core_title_text <- paste(core_motivs_unique, collapse = ", ")
       if (core_title_text == "" || core_title_text == "NULL") core_title_text <- "No core motivations identified"
       text(0.5, 0.5, paste("Core Motivations:", core_title_text), 
            cex = 2.2, font = 2, col = "black")
       
-      # ---- Row 2: Subtitle ----
+      # Row 2: Subtitle
       plot.new()
       subtitle_text <- glue("Impact threshold: {min_impact_threshold} | Job Zone: ≥ {min_job_zone} | Zero axis = centre ring")
       text(0.5, 0.5, subtitle_text, cex = 1.4, col = "black")
       
-      # ---- Row 3: Radar Chart ----
+      # Row 3: Radar Chart
       par(mar = c(1, 1, 2, 1))
-      
-      # IMPORTANT: Keep all labels exactly as they are (one line) so fmsb places them cleanly
-      clean_labels <- all_facets
       
       radarchart(
         radar_df,
@@ -880,13 +881,13 @@ if (max_congruence < congruence_threshold) {
         cglwd = 0.8,
         axislabcol = "black",  
         vlcex = 1.1,             
-        vlab = clean_labels,    # Pass the original one-line labels to fmsb
+        vlab = all_facets,
         caxislabels = c(-3, -2, 0, 1, 2, 3, 4), 
         calcex = 1.2,
         title = ""
       )
       
-      # ---- Legend ----
+      # Legend
       legend(
         x = 1.35, y = 1.0,
         legend = rownames(radar_df)[-c(1,2)],
@@ -900,17 +901,13 @@ if (max_congruence < congruence_threshold) {
         title.col = "black"
       )
       
-      # ---- Row 4: Considered Motivations ----
+      # Row 4: Considered Motivations
       par(mar = c(0, 0, 0, 0))
       plot.new()
       
       text(0.5, 0.85, "Considered Motivations (All Work Styles):", 
            font = 2, cex = 1.6, col = "black") 
       
-      considered_text <- paste(considered_motivs_unique, collapse = ", ")
-      if (considered_text == "" || considered_text == "NULL") considered_text <- "No considered motivations identified"
-      
-      # Force split into 3 lines with small gaps
       words <- considered_motivs_unique
       chunk_size <- ceiling(length(words) / 3)
       wrapped_considered <- c()
@@ -919,7 +916,6 @@ if (max_congruence < congruence_threshold) {
         wrapped_considered <- c(wrapped_considered, paste(chunk, collapse = ", "))
       }
       
-      # Adjusted spacing for larger text
       line_height <- 0.16
       start_y <- 0.65
       for (j in seq_along(wrapped_considered)) {
@@ -933,10 +929,10 @@ if (max_congruence < congruence_threshold) {
       par(mar = c(5,4,4,2) + 0.1)
     }
     
-    # ---- Draw on screen ----
+    # Draw on screen
     draw_radar()
     
-    # ---- Save PDF and PNG ----
+    # Save PDF and PNG
     pdf_file <- file.path(graphs_folder, "pims_radar_comparison.pdf")
     if (file.exists(pdf_file)) {
       tryCatch({
