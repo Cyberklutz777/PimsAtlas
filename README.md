@@ -170,7 +170,7 @@ Portia Webb
 📚 Citation
 If you use the PIMS Atlas in your research, please cite:
 
-Townsend, G. C., & Webb, P. (2026). The PIMS Atlas: Operationalising Generative Career Pathwaying Through Personality-Interest Motivational Sequences. [Journal/Preprint details].
+Townsend, G. C., & Webb, P. (2026). The PIMS Atlas: Theoretical Foundations and Operationalisation of a Generative Framework for Career Pathwaying. [Journal/Preprint details].
 
 ❓ Questions?
 For questions, issues, or contributions:
