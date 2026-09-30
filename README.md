@@ -165,8 +165,6 @@ if (file.exists("config.R")) {
 👥 Authors
 Gary Clifford Townsend (gary.townsend43@gmail.com)
 
-Portia Webb
-
 📚 Citation
 If you use the PIMS Atlas in your research, please cite:
 
