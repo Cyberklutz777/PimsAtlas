@@ -1,1 +1,12 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+authors:
+  - family-names: "Townsend"
+    given-names: "Gary"
+  - family-names: "Webb"
+    given-names: "Portia"
+title: "PimsAtlas"
+version: 1.0.0
+date-released: 2026-10-22
+url: "https://github.com/Cyberklutz777/PimsAtlas"
 
