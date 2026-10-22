@@ -1,181 +1,152 @@
-PIMS Atlas
-Personality-Interest Motivational Sequences Atlas - A Generative Career Pathwaying Tool
+PIMS Atlas Pipeline — README
+Version: 1.0 (Publication Model)
+Author: Gary C Townsend (2026)
+Purpose: Match a user's TPQ personality profile against O*NET work styles to identify the strongest occupational fits, using the PIMS (Personality-Informed Matching System) framework.
 
-The PIMS Atlas is an R-based career guidance tool that maps personality architectures to occupational psychological demand signatures using weighted cosine similarity.
+1. Overview
+This R script automates the full PIMS Atlas pipeline:
+Loads normative data (means/SDs per facet) from your NormGroups folder — falls back to hardcoded Table 1 stats if unavailable.
+Loads and combines all Work Style definition files (.xlsx) from the WorkStyles subfolder.
+Loads the Facet Mapping Matrix and Motivational Anchors files.
+Applies a Job Zone filter and Impact threshold to reduce noise.
+Builds a "demand signature" (facet vector) for every occupation using symbol parsing (±0.7σ rule) and role-based weighting.
+Loads the user's TPQ scores from UserScores.
+Computes a weighted cosine congruence between the user and every occupation.
+Enters one of two branches:
+Normal Mode — if max congruence ≥ threshold (0.2). Prints top matches, generates a radar chart (PDF + PNG), console narrative, and optional AI-generated counsellor reports.
+Diagnostic Mode — if max congruence < threshold. Produces a compassionate "no strong match" report, highlights highest/lowest trait clusters, and suggests hybrid pathways.
+Outputs a detailed verification report in the console (step-by-step calculation of the top match) for audit purposes.
 
-📁 Repository Structure
-text
-PimsAtlas/
-├── PIMS Atlas.R                          # Main R script
-├── README.md                             # This file
-└── R-Folders/                            # Data folder (ALL data files go here)
-    ├── NormGroups/                       # Normative personality data
-    │   └── pims_atlas_norm_data.csv      # TPQ normative statistics (μ, σ for 30 facets)
-    ├── UserScores/                       # User personality scores
-    │   └── user_tpq_scores.csv           # Individual's TPQ facet scores
-    ├── Graphs/                           # Output: radar charts (auto-created)
-    ├── Reports/                          # Output: PDF/TXT reports (auto-created)
-    ├── PIMS Facet Mapping Matrix.xlsx    # O*NET Work Styles → TPQ facets mapping
-    ├── PIMS Motivational Anchors.xlsx    # Motivational driver framework
-    └── [21 Work Style .xlsx files]       # O*NET Work Style data files
-🚀 Getting Started
-Prerequisites
-R (version 4.0 or later)
-
-RStudio (recommended)
-
-Required R packages (install via R console):
-
+2. Prerequisites
+R packages
 r
 install.packages(c(
   "readxl", "dplyr", "tidyr", "purrr", "glue", "stringr",
   "ggplot2", "gridExtra", "grid", "httr", "jsonlite",
   "tools", "fmsb", "scales"
 ))
-⚙️ Configuration: Setting Your Local File Path
-IMPORTANT: The script comes with a hardcoded path that will NOT work on your machine. You MUST update the work_styles_folder variable to point to your local R-Folders folder.
-
-Step 1: Locate Your R-Folders Folder
-After cloning the repository, your R-Folders folder will be located at:
-
+Folder structure
+Place the R-Folders directory inside your Documents folder. The script auto-detects it in common locations (OneDrive, Box, plain Documents) and will fall back to a recursive search.
 text
-[Your-Clone-Path]/PimsAtlas/R-Folders/
-For example:
+Documents/
+└── R-Folders/
+    ├── WorkStyles/
+    │   ├── Attention to Detail v1.0.xlsx
+    │   ├── Cautiousness v1.0.xlsx
+    │   └── ... (one file per work style)
+    ├── NormGroups/
+    │   └── (optional) facet stats CSV or XLSX
+    ├── FacetMappingMatrix/
+    │   └── PIMS Facet Mapping Matrix*.xlsx
+    ├── MotivationalAnchors/
+    │   └── PIMS Motivational Anchors*.xlsx
+    ├── UserScores/
+    │   └── user_tpq_scores.csv
+    ├── Graphs/      ← auto-created
+    └── Reports/     ← auto-created
+File-name rules (important)
+Folder	What is required
+WorkStyles/	One .xlsx per work style. The filename must start with the exact work-style name (e.g. Attention to Detail v1.0.xlsx, Cautiousness v2.1.xlsx). Version suffix is free-form. If multiple versions exist, the most recently modified one wins and a warning is printed.
+NormGroups/	A .csv or .xlsx with columns containing facet, mean (or µ/mu), and sd (or std/σ). If absent, hardcoded Table 1 values are used.
+FacetMappingMatrix/	An .xlsx starting with PIMS Facet Mapping Matrix.
+MotivationalAnchors/	An .xlsx starting with PIMS Motivational Anchors.
+UserScores/	A .csv named user_tpq_scores.csv (preferred). Other CSVs are ignored unless renamed. Column names must match the facet names exactly (e.g. Thrill-seeking, Self-controlled). The script auto-detects <facet> columns with hyphens (it converts dots to hyphens).
 
-Windows: C:/Users/YourName/Documents/GitHub/PimsAtlas/R-Folders
+3. Required Columns
+Work Style .xlsx files
+Must contain a sheet with all of these columns:
+Fixed columns:
+Impact, Job Zone, Code, Occupation
+Facet columns (30):
+Thrill-seeking, Contracted, Sociable, Assertive, Unguarded, Engaging, Compassionate, Empathic, Altruistic, Collaborative, Modest, Candid, Resilient, Self-controlled, Relaxed, Optimistic, Tempered, Impervious, Directed, Competent, Structured, Self-disciplined, Dutiful, Cautious, Creative, Unconventional, Complex, Conceptual, Conversant, Composed
+Facet cells contain a motivation symbol:
+Symbol	Meaning	Demand computed as
+↑ or Δ	High demand (primary)	μ + 0.7σ
+↓ or Λ	Low demand / suppression	μ − 0.7σ
+↔	Balance required (modulation)	μ
+0 or blank	Not required	ignored
+user_tpq_scores.csv
+Must contain one row (the user) and one column per facet, with values on the 1–4 Likert scale. Values are clamped to [1, 4] before z-standardisation.
+PIMS Facet Mapping Matrix*.xlsx
+Required columns (exact spelling):
+O*NET Broad Work Style Element
+O*NET Work Style Element
+PIMS Motivation Element
+TPQ Required Facet
+Motivation Symbol
+TPQ Facet Role
+TPQ Facet Psychological Function
+PIMS Motivational Anchors*.xlsx
+Required columns:
+O*NET Broad Work Style Element
+O*NET Work Style Element
+Primary Motivator
+PIMS Motivation Element
+PIMS Motivation Intrinsic Driver (The "How" it feels)
+PIMS Motivation Extrinsic Driver (The "What" it gains)
+Norm file (optional)
+Any of: Facet + Mean + SD (case-insensitive; µ, mu, μ, σ, std also accepted).
 
-Mac: /Users/YourName/Documents/GitHub/PimsAtlas/R-Folders
+4. Tunable Parameters
+Located in Section 1 (Configuration) near the top of the script:
+Variable	Default	What it does
+min_job_zone	3	Drops occupations whose O*NET Job Zone is below this.
+min_impact_threshold	90	Only Work Style rows with Impact ≥ 90 contribute to the occupation signature.
+congruence_threshold	0.2	Below this max congruence, Diagnostic Mode fires.
+top_n	3	Number of top occupations analysed in Normal Mode.
+z_diff_threshold	0.5	Used to classify a facet as a strength / development area / aligned.
+z_threshold (inside symbol_to_demand)	0.7	σ-multiplier for symbol → demand conversion.
+api_key (Section 13)	""	Gemini API key. Leave blank to disable AI reports (fallback templates are used instead).
 
-Linux: /home/YourName/GitHub/PimsAtlas/R-Folders
+5. Running the Script
+Fill in the API key in Section 13 if you want AI-generated reports (optional).
+Place user_tpq_scores.csv in UserScores/.
+Source the script in RStudio (Ctrl+Shift+S or source("PIMS_Atlas.R")).
+Watch the console — it prints progress at every step (found files, filters applied, occupations processed, etc.).
+Check:
+Graphs/pims_radar_comparison.pdf and .png — top-match radar chart.
+Reports/report_<Occupation>.pdf — one per top-N occupation (Normal Mode).
+Reports/counsellor_reports_full.txt — concatenated AI narratives.
+Reports/diagnostic_report.{txt,pdf} — Diagnostic Mode only.
 
-Step 2: Edit the Script
-Open PIMS Atlas.R in RStudio and find the CONFIGURATION section (around line 30):
+6. Outputs
+Normal Mode
+Console: Top 3 matches with congruence and level (Excellent ≥ 0.7, Strong ≥ 0.5, Moderate ≥ 0.3, Developing < 0.3), then per-occupation strengths/development areas, then the AI narrative.
+Radar chart (PDF + PNG): Single-occupation comparison showing the user profile vs the top match, with:
+Title containing Core Motivations (each followed by the contributing Work Styles in parentheses) and the cosine value in brackets.
+Subtitle showing the Impact threshold, Job Zone filter, and zero-axis note.
+Centred horizontal legend (User | Occupation) below the subtitle.
+Footer listing "Considered Motivations (All Work Styles)".
+PDF reports: One narrative per top-N occupation.
+Diagnostic Mode
+Console: Closest matches (with scores), cluster scores, and an AI-generated diagnostic narrative (or fallback text).
+Files: Reports/diagnostic_report.txt and Reports/diagnostic_report.pdf.
+Verification Report (always printed at end)
+Full worked example for the #1 match: source rows → Impact normalisation → symbol parsing → aggregation → weighting → z-scores → user standardisation → the weighted-cosine arithmetic table with the numerator, both norm terms, and the final CS. Useful for auditing or debugging unexpected matches.
 
-r
-# ---- 1. CONFIGURATION ----
-# HARDCODED PATH TO R-Folders (CHANGE THIS TO YOUR ACTUAL FOLDER)
-work_styles_folder <- "C:/Users/garyt/OneDrive/Documents/Box Sync Laptop/Emeris/Research/Project PIMS/PIMS Atlas Development/PimsAtlas/R-Folders"
-CHANGE THIS LINE to your actual path:
+7. Key Algorithmic Notes
+Facet standardisation: All z-scores use the loaded norm means/SDs (training_means, training_sds). User raw scores are clamped to [1, 4] before standardising.
+Weighted cosine: Facets with weight 0 (not required by the occupation) are excluded. The weight reflects the symbol role: 1.0 for primary, 0.5 + 0.2·freq for secondary, 0.3 + 0.2·freq for modulation.
+Job Zone filter applies before atlas construction — occupations below min_job_zone never enter the ranking.
+Normal vs Diagnostic branch is decided by the maximum congruence across all ranked occupations.
 
-r
-# Windows example:
-work_styles_folder <- "C:/Users/YourName/Documents/GitHub/PimsAtlas/R-Folders"
+8. Troubleshooting
+Symptom	Likely cause
+Could not automatically locate the 'R-Folders' directory	Set work_styles_folder manually in Section 1.
+No sheet contained all required columns	One of the .xlsx files is missing a facet column or a fixed column — the script lists what it found.
+Many user facets at default 2.5	Column names in user_tpq_scores.csv do not match facet names (e.g. dots vs hyphens, or typos).
+Column mismatch in mapping file	The mapping .xlsx header text is not exactly as specified in §3.
+Multiple WorkStyles files matched	Older versions in the folder. The newest by mtime is used; the script prints which one. Delete or move stale versions to silence warnings.
+Radar labels cramped	Increase vlcex upward or raise the radar_matrix[1, ] "max" value (currently 8.0) to push the outer ring inward.
+AI step prints "No valid API key"	Add your Gemini key in Section 13 or accept the fallback template.
 
-# Mac example:
-work_styles_folder <- "/Users/YourName/Documents/GitHub/PimsAtlas/R-Folders"
+9. Version History
+v1.0 — Consolidated mapping files, norm groups, radar visualisation with zero axis.
+Fix A: Radar limited to top match only; core motivations list contributing Work Styles in parentheses.
+Fix B: Radar title includes top-match cosine.
+Fix C: Legend moved to top of graph, below the impact-threshold line.
+Fix D: Legend entries separated by | and centred via strwidth().
+Fix E: Enlarged radar "max" + taller radar panel — outer facet labels no longer overlap adjacent panels.
 
-# Linux example:
-work_styles_folder <- "/home/YourName/GitHub/PimsAtlas/R-Folders"
-Step 3: Verify Your Data Files
-Ensure the following files and folders exist inside your R-Folders folder:
-
-Required Item	Description
-PIMS Facet Mapping Matrix.xlsx	Mapping file (MUST exist)
-PIMS Motivational Anchors.xlsx	Motivational anchors (MUST exist)
-NormGroups/pims_atlas_norm_data.csv	Normative data (MUST exist)
-UserScores/user_tpq_scores.csv	User scores (MUST exist)
-Attention to Detail.xlsx	Work Style data (ALL 21 files required)
-Cautiousness.xlsx	(and all other Work Style .xlsx files)
-Step 4: Run the Script
-In RStudio:
-
-Open PIMS Atlas.R
-
-Click the Source button (or press Ctrl+Shift+S / Cmd+Shift+S)
-
-Or run in the console:
-
-r
-source("PIMS Atlas.R")
-🔍 Verification: Did It Work?
-When you run the script, you should see output like this:
-
-text
-📂 Verifying paths...
-  Work Styles folder exists: TRUE
-  Mapping file exists: TRUE
-  Anchors file exists: TRUE
-  Norm Groups folder exists: TRUE
-  User Scores folder exists: TRUE
-✅ All critical files found. Continuing...
-If you see FALSE for any item, check:
-
-That the path in work_styles_folder is correct
-
-That all required files are in the R-Folders folder
-
-That folder names are spelled correctly (case-sensitive on Mac/Linux)
-
-📊 Output Files
-After running successfully, the script generates:
-
-Output	Location	Description
-pims_radar_comparison.pdf	R-Folders/Graphs/	Radar chart comparing user vs top occupations
-pims_radar_comparison.png	R-Folders/Graphs/	Radar chart (PNG format)
-report_[Occupation].pdf	R-Folders/Reports/	AI-generated career report (per occupation)
-counsellor_reports_full.txt	R-Folders/Reports/	All reports combined in text format
-diagnostic_report.pdf	R-Folders/Reports/	Diagnostic report (if no positive matches found)
-🛠️ Troubleshooting
-Error: path does not exist: ‘./R-Folders/PIMS Facet Mapping Matrix.xlsx’
-Cause: The hardcoded path doesn't match your local folder structure.
-
-Solution: Update the work_styles_folder path as described above.
-
-Error: NormGroups folder is empty or missing
-Cause: The NormGroups folder is missing from R-Folders or empty.
-
-Solution: Ensure R-Folders/NormGroups/pims_atlas_norm_data.csv exists.
-
-Error: UserScores folder is empty or missing
-Cause: The UserScores folder is missing or empty.
-
-Solution: Ensure R-Folders/UserScores/user_tpq_scores.csv exists.
-
-Warning: Using hardcoded placeholder statistics
-Cause: The normative data file was not found.
-
-Solution: Check that pims_atlas_norm_data.csv is in R-Folders/NormGroups/.
-
-📝 Alternative: Using a Configuration File (Advanced)
-For advanced users, you can create a config.R file instead of editing the main script:
-
-config.R:
-
-r
-# config.R - Custom configuration for PIMS Atlas
-work_styles_folder <- "C:/Users/YourName/Documents/GitHub/PimsAtlas/R-Folders"
-norm_groups_folder <- file.path(work_styles_folder, "NormGroups")
-graphs_folder      <- file.path(work_styles_folder, "Graphs")
-reports_folder     <- file.path(work_styles_folder, "Reports")
-userscores_folder  <- file.path(work_styles_folder, "UserScores")
-Then in PIMS Atlas.R, replace the configuration section with:
-
-r
-# ---- 1. CONFIGURATION ----
-if (file.exists("config.R")) {
-  source("config.R")
-} else {
-  # Fallback to hardcoded path
-  work_styles_folder <- "C:/Path/To/Your/R-Folders"
-  # ...
-}
-📄 License
-[Specify your license here - e.g., MIT, GPL-3, etc.]
-
-👥 Authors
-Gary Clifford Townsend (gary.townsend43@gmail.com)
-
-📚 Citation
-If you use the PIMS Atlas in your research, please cite:
-
-Townsend, G. C., & Webb, P. (2026). The PIMS Atlas: Theoretical Foundations and Operationalisation of a Generative Framework for Career Pathwaying. [Journal/Preprint details].
-
-❓ Questions?
-For questions, issues, or contributions:
-
-Open an issue on GitHub
-
-Contact the corresponding author: gary.townsend43@gmail.com
-
-Note: All participant data in the worked examples has been fully de-identified to protect participant confidentiality and anonymity.
-
+10. License / Attribution
+Townsend & Webb, 2026. Please cite the authors and version (v1.0 Publication Model) in any derived work or publication.
