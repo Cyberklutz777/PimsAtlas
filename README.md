@@ -1,6 +1,6 @@
 PIMS Atlas Pipeline — README
 Version: 1.0 (Publication Model)
-Author: Gary C Townsend (2026)
+Author: Townsend, G., & Webb, P. (2026). PimsAtlas (Version 1.0.0) [Computer software]. https://github.com/Cyberklutz777/PimsAtlas
 Purpose: Match a user's TPQ personality profile against O*NET work styles to identify the strongest occupational fits, using the PIMS (Personality-Informed Matching System) framework.
 
 1. Overview
