@@ -149,4 +149,5 @@ Fix D: Legend entries separated by | and centred via strwidth().
 Fix E: Enlarged radar "max" + taller radar panel — outer facet labels no longer overlap adjacent panels.
 
 10. License / Attribution
-Townsend & Webb, 2026. Please cite the authors and version (v1.0 Publication Model) in any derived work or publication.
+This project is licensed under the MIT License - see the LICENSE file for details.
+
