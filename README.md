@@ -1,5 +1,5 @@
 # PIMS Atlas Pipeline
-
+https://doi.org/10.6084/m9.figshare.34750359
 **Version:** 1.0 (Publication Model)  
 **Authors:** Gary C. Townsend & Portia Webb (2026)
 
