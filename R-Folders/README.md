@@ -1,2 +1,0 @@
-# R-Folders
-PIMS Atlas
