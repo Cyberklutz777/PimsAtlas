@@ -10,6 +10,13 @@
 # FIX E: Radar chart outer facet labels no longer overlap adjacent panels
 #        or each other. Achieved by enlarging the radar matrix "max" value
 #        and giving the radar panel extra height + margins.
+# FIX F: Facet-level interpretation now accounts for demand direction.
+#        Positive demands (↑, Δ) treat "above" as strength; negative demands
+#        (↓, Λ) treat "below" as strength. Balanced demands (↔) flag any
+#        deviation as a development area. z_diff_threshold governs the band.
+#        The "below (development area" typo in downstream filters is repaired,
+#        so development areas now populate correctly. The helper is vectorized
+#        with case_when because it is called after ungroup() in the pipeline.
 #
 # -----------------------------------------------------------------------------
 # INSTRUCTIONS FOR OTHER RESEARCHERS:
@@ -301,6 +308,29 @@ symbol_to_demand <- function(symbol, facet_mean, facet_sd, z_threshold = 0.7) {
 standardize_user <- function(user_raw, means = training_means, sds = training_sds) {
   user_raw <- pmax(1, pmin(4, user_raw))
   return((user_raw - means) / sds)
+}
+
+# ---- Directional interpretation of facet-level fit ----
+# Vectorized: classifies the fit between an individual's standardized score
+# (user_z) and an occupation's demand (demand_z), taking account of the DEMAND
+# DIRECTION. Vectorization is required because the helper is called after
+# ungroup() in the pipeline, so user_z and demand_z arrive as full vectors.
+# Positive demand (↑, Δ): the trait must be HIGH; being above it is a strength.
+# Negative demand (↓, Λ): the trait must be LOW; being below it is a strength.
+# Near-zero demand (↔): balance is required; any large deviation is a dev area.
+classify_directional_fit <- function(user_z, demand_z, threshold = 0.5) {
+  delta <- user_z - demand_z
+  dplyr::case_when(
+    demand_z >=  threshold & delta >  threshold ~ "above (strength)",
+    demand_z >=  threshold & delta < -threshold ~ "below (development area)",
+    demand_z >=  threshold                      ~ "aligned",
+    demand_z <= -threshold & delta < -threshold ~ "below (strength)",
+    demand_z <= -threshold & delta >  threshold ~ "above (development area)",
+    demand_z <= -threshold                      ~ "aligned",
+    delta >  threshold                          ~ "deviation high (development area)",
+    delta < -threshold                          ~ "deviation low (development area)",
+    TRUE                                        ~ "aligned"
+  )
 }
 
 find_matching_file <- function(folder_path, base_name, prefer_most_recent = TRUE) {
@@ -1327,11 +1357,7 @@ if (max_congruence < congruence_threshold) {
       ) %>%
       ungroup() %>%
       mutate(
-        interpretation = case_when(
-          user_z - demand_z > 0.5 ~ "above (strength)",
-          user_z - demand_z < -0.5 ~ "below (development area)",
-          TRUE ~ "aligned"
-        )
+        interpretation = classify_directional_fit(user_z, demand_z, z_diff_threshold)
       ) %>%
       filter(weight > 0) %>%
       select(facet, user_z, demand_z, weight, motivation, psych_function, role, direction, interpretation)
@@ -1343,8 +1369,8 @@ if (max_congruence < congruence_threshold) {
       cat("\n   • Core requirements:")
       for (f in primary$facet) cat(glue("\n      - {f}"))
     }
-    strengths <- facet_details %>% filter(interpretation == "above (strength)") %>% pull(facet)
-    dev_areas <- facet_details %>% filter(interpretation == "below (development area)") %>% pull(facet)
+    strengths <- facet_details %>% filter(grepl("strength", interpretation, fixed = TRUE)) %>% pull(facet)
+    dev_areas <- facet_details %>% filter(grepl("development area", interpretation, fixed = TRUE)) %>% pull(facet)
     if (length(strengths) > 0) cat(glue("\n   ✅ Strengths: {paste(strengths, collapse=', ')}"))
     if (length(dev_areas) > 0) cat(glue("\n   🔧 Development: {paste(dev_areas, collapse=', ')}"))
     cat("\n\n", strrep("─", 50), "\n")
@@ -1434,11 +1460,7 @@ if (max_congruence < congruence_threshold) {
       ) %>%
       ungroup() %>%
       mutate(
-        interpretation = case_when(
-          user_z - demand_z > 0.5 ~ "above (strength)",
-          user_z - demand_z < -0.5 ~ "below (development area)",
-          TRUE ~ "aligned"
-        )
+        interpretation = classify_directional_fit(user_z, demand_z, z_diff_threshold)
       ) %>%
       filter(weight > 0) %>%
       select(facet, user_z, demand_z, weight, motivation, psych_function, role, direction, interpretation)
@@ -1454,8 +1476,8 @@ if (max_congruence < congruence_threshold) {
     facet_details <- facet_details_list[[code]]
     if (is.null(facet_details)) next
     
-    strengths <- facet_details %>% filter(interpretation == "above (strength)") %>% pull(facet)
-    dev_areas <- facet_details %>% filter(interpretation == "below (development area)") %>% pull(facet)
+    strengths <- facet_details %>% filter(grepl("strength", interpretation, fixed = TRUE)) %>% pull(facet)
+    dev_areas <- facet_details %>% filter(grepl("development area", interpretation, fixed = TRUE)) %>% pull(facet)
     
     prompt <- build_prompt(occ_name, congruence, facet_details, strengths, dev_areas)
     
